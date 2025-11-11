@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>תרגול למבחן מתמטיקה - גרסה 2</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .math-expression {
+            direction: ltr;
+            text-align: center;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #059669;
+            margin: 1rem 0;
+            padding: 1rem;
+            background-color: #d1fae5;
+            border-radius: 0.5rem;
+            border: 2px solid #10b981;
+        }
+        .level-badge {
+            animation: pulse 0.5s ease-in-out;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const MathPracticeGame = () => {
+          const [currentQuestion, setCurrentQuestion] = useState(null);
+          const [previousQuestionIndex, setPreviousQuestionIndex] = useState(null);
+          const [userAnswer, setUserAnswer] = useState('');
+          const [feedback, setFeedback] = useState(null);
+          const [score, setScore] = useState({ correct: 0, total: 0 });
+          const [showExplanation, setShowExplanation] = useState(false);
+          const [currentLevel, setCurrentLevel] = useState('regular');
+          const [streak, setStreak] = useState(0);
+          const [showLevelUp, setShowLevelUp] = useState(false);
+
+          const parseQuestion = (question) => {
+            const patterns = [
+              /(.+?):\s*(.+)$/,
+              /(.+?)\s+([\d\/⅓⅔¼¾⅛⅜⅝⅞]+\s*[+\-×÷]\s*.+)$/,
+            ];
+            
+            for (let pattern of patterns) {
+              const match = question.match(pattern);
+              if (match) {
+                return {
+                  instruction: match[1].trim(),
+                  expression: match[2].trim()
+                };
+              }
+            }
+            
+            return {
+              instruction: question,
+              expression: null
+            };
+          };
+
+          const getLevelText = (level) => {
+            switch(level) {
+              case 'regular': return 'רמה: רגילה ⭐';
+              case 'advanced': return 'רמה: מתקדמת ⭐⭐';
+              case 'challenge': return 'רמה: אתגר ⭐⭐⭐';
+              default: return '';
+            }
+          };
+
+          const getLevelColor = (level) => {
+            switch(level) {
+              case 'regular': return 'bg-green-500 text-white';
+              case 'advanced': return 'bg-orange-500 text-white';
+              case 'challenge': return 'bg-pink-500 text-white';
+              default: return 'bg-gray-500';
+            }
+          };
+
+          // בנק שאלות חדש - גרסה 2
+          const questionBank = [
+            // רמה רגילה - סט שאלות חדש
+            {
+              question: 'קרא/י וכתוב/י את השבר: שלושה חמישיות',
+              answer: '3/5',
+              alternatives: ['⅗'],
+              explanation: 'שלושה חמישיות = 3 חלקים מתוך 5 = 3/5 או ⅗',
+              difficulty: 'regular'
+            },
+            {
+              question: 'כמה שישיות יש בשלם אחד?',
+              answer: '6',
+              explanation: 'שלם אחד = 6/6 = 6 שישיות',
+              difficulty: 'regular'
+            },
+            {
+              question: 'האם השבר 5/5 שווה לשלם? (כן/לא)',
+              answer: 'כן',
+              alternatives: ['yes', 'כ'],
+              explanation: '5/5 = שלם אחד! המונה והמכנה שווים',
+              difficulty: 'regular'
+            },
+            {
+              question: 'כמה חמישיות יש בשלם אחד?',
+              answer: '5',
+              explanation: 'שלם אחד = 5/5 = 5 חמישיות',
+              difficulty: 'regular'
+            },
+            {
+              question: 'המר/י למספר מעורב: 9/4',
+              answer: '2¼',
+              alternatives: ['2 1/4'],
+              explanation: '9÷4 = 2 שלמים ונשאר 1, לכן 9/4 = 2¼',
+              difficulty: 'regular',
+              commonMistake: 'חלק את המונה במכנה!'
+            },
+            {
+              question: 'המר/י לשבר פשוט: 3½',
+              answer: '7/2',
+              explanation: '3 × 2 = 6, ועוד 1 = 7, לכן 3½ = 7/2',
+              difficulty: 'regular',
+              commonMistake: 'כפול המכנה בשלמים ואז חבר המונה'
+            },
+            {
+              question: 'צמצם/י: 6/12',
+              answer: '1/2',
+              alternatives: ['½'],
+              explanation: '6÷6 = 1, 12÷6 = 2, לכן 6/12 = 1/2',
+              difficulty: 'regular'
+            },
+            {
+              question: 'מצא/י שם נוסף לשבר ⅓ (עם מכנה 9):',
+              answer: '3/9',
+              explanation: '⅓ = 3/9 (כפלנו המונה והמכנה ב-3)',
+              difficulty: 'regular'
+            },
+            {
+              question: 'צמצם/י: 8/12',
+              answer: '2/3',
+              alternatives: ['⅔'],
+              explanation: '8÷4 = 2, 12÷4 = 3, לכן 8/12 = 2/3',
+              difficulty: 'regular'
+            },
+            {
+              question: 'סמן/י < , > או =:    ¾ ___ ½',
+              answer: '>',
+              explanation: 'שלושה רבעים גדול יותר מחצי! ¾ > ½',
+              difficulty: 'regular'
+            },
+            {
+              question: 'סמן/י < , > או =:    3/6 ___ ½',
+              answer: '=',
+              explanation: '3/6 = ½ (אם נצמצם 3/6 נקבל ½)',
+              difficulty: 'regular'
+            },
+            {
+              question: 'סמן/י < , > או =:    ¼ ___ ⅓',
+              answer: '<',
+              explanation: 'רבע קטן משליש! ¼ < ⅓',
+              difficulty: 'regular'
+            },
+            {
+              question: 'כתוב/י במילים: 42,356',
+              answer: 'ארבעים ושניים אלף שלוש מאות חמישים ושש',
+              explanation: '40,000 + 2,000 + 300 + 50 + 6',
+              difficulty: 'regular'
+            },
+            {
+              question: 'כתוב/י בספרות: שלושים ואחד אלף ושבע מאות',
+              answer: '31700',
+              alternatives: ['31,700'],
+              explanation: '30,000 + 1,000 + 700 = 31,700',
+              difficulty: 'regular'
+            },
+            {
+              question: 'כתוב/י בספרות: עשרים אלף ושמונה מאות',
+              answer: '20800',
+              alternatives: ['20,800'],
+              explanation: '20,000 + 800 = 20,800',
+              difficulty: 'regular'
+            },
+            {
+              question: 'מה המספר העוקב למספר: 18,999',
+              answer: '19000',
+              alternatives: ['19,000'],
+              explanation: 'אחרי 18,999 מגיע 19,000',
+              difficulty: 'regular',
+              commonMistake: 'שים לב למעבר בין אלפים!'
+            },
+            {
+              question: 'מה המספר הקודם למספר: 25,000',
+              answer: '24999',
+              alternatives: ['24,999'],
+              explanation: 'לפני 25,000 מגיע 24,999',
+              difficulty: 'regular'
+            },
+            {
+              question: 'מה המספר העוקב למספר: 29,099',
+              answer: '29100',
+              alternatives: ['29,100'],
+              explanation: 'אחרי 29,099 מגיע 29,100',
+              difficulty: 'regular'
+            },
+            {
+              question: 'חשב/י לפי סדר פעולות: 30 + 6 × 5',
+              answer: '60',
+              explanation: 'ראשית כפל: 6 × 5 = 30, ואז חיבור: 30 + 30 = 60',
+              difficulty: 'regular',
+              commonMistake: 'כפל תמיד קודם לחיבור!'
+            },
+            {
+              question: 'חשב/י לפי סדר פעולות: (40 - 15) ÷ 5',
+              answer: '5',
+              explanation: 'ראשית סוגריים: 40 - 15 = 25, ואז חילוק: 25 ÷ 5 = 5',
+              difficulty: 'regular',
+              commonMistake: 'סוגריים קודם כל!'
+            },
+            {
+              question: 'חשב/י: 24 - 4 × 5',
+              answer: '4',
+              explanation: 'ראשית כפל: 4 × 5 = 20, ואז חיסור: 24 - 20 = 4',
+              difficulty: 'regular'
+            },
+            {
+              question: 'חבר/י: 15,678 + 2,314',
+              answer: '17992',
+              alternatives: ['17,992'],
+              explanation: 'חיבור עמודות: 8+4=12 (נושא 1), 7+1+1=9, 6+3=9, 5+2=7, 1+0=1',
+              difficulty: 'regular'
+            },
+            {
+              question: 'חבר/י: 9,456 + 3,287',
+              answer: '12743',
+              alternatives: ['12,743'],
+              explanation: 'חיבור עמודות = 12,743',
+              difficulty: 'regular'
+            },
+            {
+              question: 'חסר/י: 32,567 - 11,234',
+              answer: '21333',
+              alternatives: ['21,333'],
+              explanation: 'חיסור עמודות: הפרש = 21,333',
+              difficulty: 'regular'
+            },
+            {
+              question: 'חסר/י: 27,800 - 5,300',
+              answer: '22500',
+              alternatives: ['22,500'],
+              explanation: 'חיסור עמודות = 22,500',
+              difficulty: 'regular'
+            },
+            {
+              question: 'חשב/י: 6,000 + 3,500 - 2,200',
+              answer: '7300',
+              alternatives: ['7,300'],
+              explanation: '6,000 + 3,500 = 9,500, ואז 9,500 - 2,200 = 7,300',
+              difficulty: 'regular'
+            },
+
+            // רמה מתקדמת - תרגילים חדשים
+            {
+              question: 'כתוב/י שני שמות שונים לשבר ⅓:',
+              answer: '2/6',
+              alternatives: ['3/9', '4/12', '5/15'],
+              explanation: 'דוגמאות: 2/6, 3/9, 4/12... (כל אחד נכון!)',
+              difficulty: 'advanced'
+            },
+            {
+              question: 'המר/י למספר מעורב: 13/4',
+              answer: '3¼',
+              alternatives: ['3 1/4'],
+              explanation: '13÷4 = 3 שלמים ונשאר 1, לכן 13/4 = 3¼',
+              difficulty: 'advanced'
+            },
+            {
+              question: 'המר/י לשבר פשוט: 4¾',
+              answer: '19/4',
+              explanation: '4 × 4 = 16, ועוד 3 = 19, לכן 4¾ = 19/4',
+              difficulty: 'advanced'
+            },
+            {
+              question: 'צמצם/י עד הסוף: 15/25',
+              answer: '3/5',
+              alternatives: ['⅗'],
+              explanation: '15÷5 = 3, 25÷5 = 5, לכן 15/25 = 3/5',
+              difficulty: 'advanced'
+            },
+            {
+              question: 'צמצם/י עד הסוף: 18/24',
+              answer: '3/4',
+              alternatives: ['¾'],
+              explanation: '18÷6 = 3, 24÷6 = 4, לכן 18/24 = 3/4',
+              difficulty: 'advanced',
+              commonMistake: 'המחלק המשותף הגדול ביותר הוא 6'
+            },
+            {
+              question: 'כמה שישיות יש ב-3 שלמים?',
+              answer: '18',
+              explanation: '3 × 6 = 18 שישיות (3 = 18/6)',
+              difficulty: 'advanced'
+            },
+            {
+              question: 'צמצם/י והשווה/י: 4/8 ___ 3/6',
+              answer: '=',
+              explanation: '4/8 = ½ ו-3/6 = ½, לכן שווים!',
+              difficulty: 'advanced'
+            },
+            {
+              question: 'פרק/י למספרים: 58,743 = ? עשרות אלפים + ? אלפים',
+              answer: '5',
+              alternatives: ['50000', '5+8'],
+              explanation: '5 עשרות אלפים = 50,000, ו-8 אלפים = 8,000',
+              difficulty: 'advanced'
+            },
+            {
+              question: 'מה ערך הספרה 4 במספר: 42,678',
+              answer: '40000',
+              alternatives: ['40,000', 'ארבעים אלף'],
+              explanation: 'הספרה 4 במקום עשרות האלפים = 40,000',
+              difficulty: 'advanced'
+            },
+            {
+              question: 'איזה מספר נמצא בדיוק באמצע בין 15,400 ל-15,600?',
+              answer: '15500',
+              alternatives: ['15,500'],
+              explanation: '15,400 + 100 = 15,500 (או 15,600 - 100)',
+              difficulty: 'advanced'
+            },
+            {
+              question: 'חשב/י לפי סדר פעולות: 80 - 4 × 9 + 16',
+              answer: '60',
+              explanation: '4 × 9 = 36, אז 80 - 36 = 44, ואז 44 + 16 = 60',
+              difficulty: 'advanced'
+            },
+            {
+              question: 'חשב/י לפי סדר פעולות: 90 ÷ (6 + 3) × 3',
+              answer: '30',
+              explanation: 'סוגריים: 6 + 3 = 9, אז 90 ÷ 9 = 10, ואז 10 × 3 = 30',
+              difficulty: 'advanced'
+            },
+            {
+              question: 'חבר/י: 27,845 + 18,376',
+              answer: '46221',
+              alternatives: ['46,221'],
+              explanation: 'חיבור עמודות = 46,221',
+              difficulty: 'advanced'
+            },
+            {
+              question: 'חסר/י: 60,000 - 27,456',
+              answer: '32544',
+              alternatives: ['32,544'],
+              explanation: 'חיסור עמודות עם שאילות = 32,544',
+              difficulty: 'advanced',
+              commonMistake: 'שים לב לשאילות!'
+            },
+            {
+              question: 'מצא/י את המספר החסר: 18,700 + ? = 25,000',
+              answer: '6300',
+              alternatives: ['6,300'],
+              explanation: '25,000 - 18,700 = 6,300',
+              difficulty: 'advanced'
+            },
+
+            // רמה אתגר - שאלות מאתגרות חדשות
+            {
+              question: 'צמצם/י את השבר 30/45 עד הסוף:',
+              answer: '2/3',
+              alternatives: ['⅔'],
+              explanation: '30÷15 = 2, 45÷15 = 3, לכן 30/45 = 2/3',
+              difficulty: 'challenge',
+              commonMistake: 'המחלק המשותף הגדול ביותר הוא 15'
+            },
+            {
+              question: 'המר/י 6⅜ לשבר פשוט:',
+              answer: '51/8',
+              explanation: '6 × 8 = 48, 48 + 3 = 51, לכן 6⅜ = 51/8',
+              difficulty: 'challenge'
+            },
+            {
+              question: 'סמן/י < , > או =:    4/7 ___ ⅗',
+              answer: '<',
+              explanation: '4/7 = 20/35 ו-⅗ = 21/35, לכן 4/7 < ⅗',
+              difficulty: 'challenge',
+              commonMistake: 'הבא למכנה משותף (35)'
+            },
+            {
+              question: 'סמן/י < , > או =:    7/9 ___ ⅘',
+              answer: '<',
+              explanation: '7/9 = 35/45 ו-⅘ = 36/45, לכן 7/9 < ⅘',
+              difficulty: 'challenge'
+            },
+            {
+              question: 'כתוב/י את המספר הקטן ביותר עם הספרות: 5, 8, 2, 9, 0',
+              answer: '20589',
+              alternatives: ['20,589'],
+              explanation: 'נסדר מהקטן לגדול (0 לא יכול להיות ראשון): 2, 0, 5, 8, 9',
+              difficulty: 'challenge'
+            },
+            {
+              question: 'מה ההפרש בין 99,999 ל-10,000?',
+              answer: '89999',
+              alternatives: ['89,999'],
+              explanation: '99,999 - 10,000 = 89,999',
+              difficulty: 'challenge'
+            },
+            {
+              question: 'חשב/י לפי סדר פעולות: 150 ÷ (12 - 7) + 20 × 2',
+              answer: '70',
+              explanation: '(12-7)=5, 150÷5=30, 20×2=40, 30+40=70',
+              difficulty: 'challenge'
+            },
+            {
+              question: 'השלם/י את המשוואה: (? - 15) × 4 = 100',
+              answer: '40',
+              explanation: '100 ÷ 4 = 25, אז 25 + 15 = 40',
+              difficulty: 'challenge'
+            },
+            {
+              question: 'חבר/י: 36,789 + 28,567 + 15,234',
+              answer: '80590',
+              alternatives: ['80,590'],
+              explanation: 'חיבור של 3 מספרים = 80,590',
+              difficulty: 'challenge'
+            },
+            {
+              question: 'חסר/י: 90,000 - 48,765',
+              answer: '41235',
+              alternatives: ['41,235'],
+              explanation: 'חיסור עם שאילות רבות = 41,235',
+              difficulty: 'challenge'
+            }
+          ];
+
+          const generateNewQuestion = () => {
+            const levelQuestions = questionBank.filter(q => q.difficulty === currentLevel);
+            let randomIndex;
+            
+            do {
+              randomIndex = Math.floor(Math.random() * levelQuestions.length);
+            } while (levelQuestions.length > 1 && previousQuestionIndex === randomIndex);
+            
+            setCurrentQuestion(levelQuestions[randomIndex]);
+            setPreviousQuestionIndex(randomIndex);
+            setUserAnswer('');
+            setFeedback(null);
+            setShowExplanation(false);
+          };
+
+          useEffect(() => {
+            generateNewQuestion();
+          }, [currentLevel]);
+
+          const checkLevelUp = (newStreak) => {
+            if (newStreak >= 5) {
+              if (currentLevel === 'regular') {
+                setCurrentLevel('advanced');
+                setShowLevelUp(true);
+                setStreak(0);
+                setTimeout(() => setShowLevelUp(false), 3000);
+              } else if (currentLevel === 'advanced') {
+                setCurrentLevel('challenge');
+                setShowLevelUp(true);
+                setStreak(0);
+                setTimeout(() => setShowLevelUp(false), 3000);
+              } else {
+                setStreak(0);
+              }
+            }
+          };
+
+          const checkAnswer = () => {
+            if (!userAnswer.trim()) {
+              setFeedback({ correct: false, message: 'נא להזין תשובה' });
+              return;
+            }
+
+            const normalizedUserAnswer = userAnswer.trim().toLowerCase().replace(/\s+/g, '');
+            const normalizedCorrectAnswer = currentQuestion.answer.toLowerCase().replace(/\s+/g, '');
+            
+            const alternatives = currentQuestion.alternatives || [];
+            const isCorrect = normalizedUserAnswer === normalizedCorrectAnswer ||
+                             alternatives.some(alt => normalizedUserAnswer === alt.toLowerCase().replace(/\s+/g, ''));
+
+            if (isCorrect) {
+              setFeedback({ correct: true, message: '✓ נכון! כל הכבוד!' });
+              setScore(prev => ({ correct: prev.correct + 1, total: prev.total + 1 }));
+              const newStreak = streak + 1;
+              setStreak(newStreak);
+              checkLevelUp(newStreak);
+            } else {
+              setFeedback({ 
+                correct: false, 
+                message: `✗ לא נכון. התשובה הנכונה: ${currentQuestion.answer}` 
+              });
+              setScore(prev => ({ ...prev, total: prev.total + 1 }));
+              setStreak(0);
+              setShowExplanation(true);
+            }
+          };
+
+          const handleKeyPress = (e) => {
+            if (e.key === 'Enter') {
+              if (feedback) {
+                generateNewQuestion();
+              } else {
+                checkAnswer();
+              }
+            }
+          };
+
+          const getDifficultyColor = (difficulty) => {
+            switch(difficulty) {
+              case 'regular': return 'bg-green-100 text-green-800';
+              case 'advanced': return 'bg-orange-100 text-orange-800';
+              case 'challenge': return 'bg-pink-100 text-pink-800';
+              default: return 'bg-gray-100';
+            }
+          };
+
+          const getDifficultyText = (difficulty) => {
+            switch(difficulty) {
+              case 'regular': return 'רגילה';
+              case 'advanced': return 'מתקדמת';
+              case 'challenge': return 'אתגר';
+              default: return '';
+            }
+          };
+
+          if (!currentQuestion) return <div className="p-8 text-center">טוען...</div>;
+
+          const percentage = score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0;
+          const parsedQuestion = parseQuestion(currentQuestion.question);
+
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-50 p-6" dir="rtl">
+              <div className="max-w-3xl mx-auto">
+                <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                  <h1 className="text-3xl font-bold text-center text-green-600 mb-2">
+                    🎯 תרגול למבחן - גרסה 2
+                  </h1>
+                  <p className="text-center text-gray-600">כיתה ד' | מבחן תאריך 17/11/2025</p>
+                  <p className="text-center text-sm text-green-600 font-semibold mt-2">⭐ תרגילים חדשים לגמרי!</p>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
+                  <div className="flex justify-between items-center">
+                    <div className={`px-4 py-2 rounded-lg font-bold level-badge ${getLevelColor(currentLevel)}`}>
+                      {getLevelText(currentLevel)}
+                    </div>
+                    <div>
+                      <span className="text-lg font-bold text-orange-600">🔥 רצף: {streak}/5</span>
+                      {streak > 0 && <span className="text-sm text-gray-600 mr-2">(עוד {5 - streak}!)</span>}
+                    </div>
+                  </div>
+                </div>
+
+                {showLevelUp && (
+                  <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-lg shadow-lg p-6 mb-6 text-center">
+                    <h2 className="text-2xl font-bold mb-2">🎉 כל הכבוד!</h2>
+                    <p className="text-xl">עלית לרמה הבאה! {getLevelText(currentLevel)}</p>
+                  </div>
+                )}
+
+                <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <div className="text-3xl font-bold text-green-600" dir="ltr">{score.correct}</div>
+                      <div className="text-sm text-gray-600">תשובות נכונות</div>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold text-blue-600" dir="ltr">{score.total}</div>
+                      <div className="text-sm text-gray-600">סה"כ שאלות</div>
+                    </div>
+                    <div>
+                      <div className="text-3xl font-bold text-purple-600" dir="ltr">{percentage}%</div>
+                      <div className="text-sm text-gray-600">אחוז הצלחה</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-lg p-8 mb-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getDifficultyColor(currentQuestion.difficulty)}`}>
+                      {getDifficultyText(currentQuestion.difficulty)}
+                    </span>
+                    <span className="text-sm text-gray-500">שאלה #{score.total + 1}</span>
+                  </div>
+
+                  <div className="mb-6">
+                    <p className="text-xl font-semibold text-gray-700 mb-3">
+                      {parsedQuestion.instruction}
+                    </p>
+                    {parsedQuestion.expression && (
+                      <div className="math-expression">
+                        {parsedQuestion.expression}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mb-4">
+                    <input
+                      type="text"
+                      value={userAnswer}
+                      onChange={(e) => setUserAnswer(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder="הקלד/י את התשובה כאן..."
+                      disabled={feedback !== null}
+                      className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:border-green-500"
+                      dir="ltr"
+                      style={{textAlign: 'center', fontSize: '1.5rem'}}
+                    />
+                  </div>
+
+                  {feedback && (
+                    <div className={`p-4 rounded-lg mb-4 ${feedback.correct ? 'bg-green-100 border-2 border-green-500' : 'bg-red-100 border-2 border-red-500'}`}>
+                      <p className={`font-bold text-lg ${feedback.correct ? 'text-green-800' : 'text-red-800'}`}>
+                        {feedback.message}
+                      </p>
+                    </div>
+                  )}
+
+                  {showExplanation && currentQuestion.explanation && (
+                    <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4 mb-4">
+                      <p className="font-bold text-blue-800 mb-2">💡 הסבר:</p>
+                      <p className="text-blue-900" dir="ltr" style={{textAlign: 'center'}}>{currentQuestion.explanation}</p>
+                    </div>
+                  )}
+
+                  {showExplanation && currentQuestion.commonMistake && (
+                    <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-4">
+                      <p className="font-bold text-yellow-800 mb-2">⚠️ נקודת תשומת לב:</p>
+                      <p className="text-yellow-900">{currentQuestion.commonMistake}</p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-4">
+                    {!feedback ? (
+                      <button
+                        onClick={checkAnswer}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                      >
+                        בדוק תשובה
+                      </button>
+                    ) : (
+                      <button
+                        onClick={generateNewQuestion}
+                        className="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-6 rounded-lg transition-colors"
+                      >
+                        שאלה הבאה ←
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-lg p-6">
+                  <h3 className="font-bold text-lg mb-3 text-gray-800">📝 טיפים לתרגול:</h3>
+                  <ul className="space-y-2 text-gray-700">
+                    <li>• <strong className="text-green-600">גרסה 2</strong> - תרגילים שונים לגמרי!</li>
+                    <li>• 5 תשובות נכונות ברצף = עולים רמה! 🔥</li>
+                    <li>• אם טעית - קרא/י את ההסבר</li>
+                    <li>• ניתן ללחוץ Enter לשלוח תשובה</li>
+                    <li>• מטרה: להגיע ל-80% הצלחה ומעלה!</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        ReactDOM.render(<MathPracticeGame />, document.getElementById('root'));
+    </script>
+</body>
+</html>
